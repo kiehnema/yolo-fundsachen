@@ -1,70 +1,67 @@
 import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
-import pandas as pd
-import os
-from datetime import datetime
+import numpy as np
 
-# Modell laden
-model = YOLO("yolov8n.pt")
+# Seiteneinstellungen
+st.set_page_config(
+    page_title="KI Objekterkennung",
+    page_icon="🤖",
+    layout="centered"
+)
 
-UPLOAD_FOLDER = "uploads"
-DATA_FILE = "fundliste.csv"
+st.title("🤖 KI Objekterkennung")
+st.write("Lade ein Bild hoch und die KI erkennt automatisch die Objekte darauf.")
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# Modell laden (wird einmal geladen und dann gecached)
+@st.cache_resource
+def load_model():
+    model = YOLO("yolov8n.pt")
+    return model
 
-st.title("Digitales Fundbüro mit KI")
+model = load_model()
 
-st.write("Lade ein Bild eines gefundenen Gegenstands hoch.")
-
-uploaded_file = st.file_uploader("Bild hochladen", type=["jpg", "jpeg", "png"])
+# Datei Upload
+uploaded_file = st.file_uploader(
+    "Bild hochladen",
+    type=["jpg", "jpeg", "png"]
+)
 
 if uploaded_file is not None:
 
+    # Bild öffnen
     image = Image.open(uploaded_file)
-    st.image(image, caption="Hochgeladenes Bild", use_column_width=True)
 
-    # Bild speichern
-    filepath = os.path.join(UPLOAD_FOLDER, uploaded_file.name)
-    image.save(filepath)
+    st.subheader("Hochgeladenes Bild")
+    st.image(image, use_column_width=True)
 
-    # KI Analyse
-    results = model(filepath)
+    # Bild in numpy umwandeln
+    img_array = np.array(image)
 
+    st.write("🔍 KI analysiert das Bild...")
+
+    # Objekterkennung
+    results = model(img_array)
+
+    # Annotiertes Bild mit Bounding Boxes
+    annotated_image = results[0].plot()
+
+    st.subheader("Erkannte Objekte")
+    st.image(annotated_image, use_column_width=True)
+
+    # Erkannte Klassen sammeln
     labels = []
-    for r in results:
-        for c in r.boxes.cls:
-            labels.append(model.names[int(c)])
+    for cls in results[0].boxes.cls:
+        labels.append(model.names[int(cls)])
 
+    # Ergebnisse anzeigen
     if labels:
-        detected = ", ".join(set(labels))
+        unique_labels = list(set(labels))
+        st.success("Erkannt wurden:")
+        for obj in unique_labels:
+            st.write(f"• {obj}")
     else:
-        detected = "Unbekannt"
+        st.warning("Keine Objekte erkannt.")
 
-    st.success(f"Erkannte Objekte: {detected}")
-
-    # Fund speichern
-    entry = {
-        "zeit": datetime.now(),
-        "datei": uploaded_file.name,
-        "erkannte_objekte": detected
-    }
-
-    if os.path.exists(DATA_FILE):
-        df = pd.read_csv(DATA_FILE)
-        df = pd.concat([df, pd.DataFrame([entry])], ignore_index=True)
-    else:
-        df = pd.DataFrame([entry])
-
-    df.to_csv(DATA_FILE, index=False)
-
-    st.success("Fund wurde gespeichert!")
-
-# Fundliste anzeigen
-st.header("Gespeicherte Funde")
-
-if os.path.exists(DATA_FILE):
-    df = pd.read_csv(DATA_FILE)
-    st.dataframe(df)
-else:
-    st.write("Noch keine Einträge vorhanden.")
+st.markdown("---")
+st.caption("KI basiert auf YOLO Objekt-Erkennung.")
