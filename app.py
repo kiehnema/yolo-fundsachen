@@ -11,7 +11,7 @@ from datetime import datetime
 # -----------------------------
 st.set_page_config(page_title="Digitales KI-Fundbüro", layout="wide")
 st.title("🧠 Digitales KI-Fundbüro")
-st.write("Bilder hochladen, Objekte automatisch erkennen, Fundliste anzeigen & filtern.")
+st.write("Bilder hochladen, Objekte automatisch erkennen und Fundliste auf Knopfdruck anzeigen.")
 
 # Ordner & CSV-Datei
 UPLOAD_FOLDER = "uploads"
@@ -65,7 +65,7 @@ if uploaded_file and prompt_list:
 
         entry = {
             "zeit": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "fundort": "",  # leer, kann später ergänzt werden
+            "fundort": "",
             "beschreibung": "",
             "datei": uploaded_file.name,
             "erkannte_objekte": ", ".join(set(detected))
@@ -85,28 +85,21 @@ if uploaded_file and prompt_list:
         st.warning("Keine der eingegebenen Objekte erkannt. Fund nicht gespeichert.")
 
 # -----------------------------
-# Fundliste anzeigen & filtern
+# Button: Alle Funde anzeigen
 # -----------------------------
-st.header("Alle Funde")
+st.header("Funde anzeigen")
+if st.button("Alle Funde anzeigen"):
 
-if os.path.exists(DATA_FILE):
-    df = pd.read_csv(DATA_FILE)
-
-    # Filter
-    filter_object = st.multiselect(
-        "Nach Objekt filtern:",
-        options=list(set(sum([s.split(", ") for s in df["erkannte_objekte"].tolist()], [])))
-    )
-    filter_location = st.text_input("Nach Fundort filtern:")
-
-    df_filtered = df.copy()
-    if filter_object:
-        df_filtered = df_filtered[df_filtered["erkannte_objekte"].apply(
-            lambda x: any(o in x for o in filter_object)
-        )]
-    if filter_location:
-        df_filtered = df_filtered[df_filtered["fundort"].str.contains(filter_location, case=False)]
-
-    st.dataframe(df_filtered)
-else:
-    st.write("Noch keine Einträge vorhanden.")
+    if os.path.exists(DATA_FILE):
+        df = pd.read_csv(DATA_FILE)
+        for i, row in df.iterrows():
+            st.subheader(f"Fund vom {row['zeit']}")
+            st.write(f"Objekte: {row['erkannte_objekte']}")
+            st.write(f"Fundort: {row['fundort']}")
+            st.write(f"Beschreibung: {row['beschreibung']}")
+            image_path = os.path.join(UPLOAD_FOLDER, row["datei"])
+            if os.path.exists(image_path):
+                st.image(image_path, width=300)
+            st.markdown("---")
+    else:
+        st.write("Noch keine Einträge vorhanden.")
