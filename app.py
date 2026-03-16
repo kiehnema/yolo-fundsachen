@@ -11,7 +11,7 @@ from datetime import datetime
 # -----------------------------
 st.set_page_config(page_title="Digitales KI-Fundbüro", layout="wide")
 st.title("🧠 Digitales KI-Fundbüro")
-st.write("Bilder hochladen, die KI erkennt automatisch alle Objekte. Funde auf Knopfdruck ein-/ausblenden.")
+st.write("Bilder hochladen, die KI erkennt automatisch alle Objekte. Funde ein-/ausblenden.")
 
 # Ordner & CSV-Datei
 UPLOAD_FOLDER = "uploads"
@@ -30,10 +30,7 @@ model = load_model()
 # -----------------------------
 # Bild hochladen
 # -----------------------------
-uploaded_file = st.file_uploader(
-    "Bild hochladen",
-    type=["jpg", "jpeg", "png"]
-)
+uploaded_file = st.file_uploader("Bild hochladen", type=["jpg","jpeg","png"])
 
 # -----------------------------
 # KI Analyse & Fund speichern
@@ -42,17 +39,16 @@ if uploaded_file:
     image = Image.open(uploaded_file)
     st.image(image, caption="Hochgeladenes Bild", use_column_width=True)
 
-    # Vollautomatisch: YOLO-World erkennt alle Objekte
-    results = model.predict(np.array(image))  # Kein Prompt nötig
+    # Vollautomatisch: YOLOWorld erkennt alles
+    results = model.predict(np.array(image))  # kein Prompt nötig
     annotated = results[0].plot()
     st.image(annotated, caption="Erkannte Objekte", use_column_width=True)
 
     labels = results[0].boxes.cls
-    detected = results[0].names  # alle erkannten Klassen aus YOLOWorld
+    class_names = results[0].names  # alle erkannten Klassen
 
-    # Wenn Objekte erkannt wurden
     if len(labels) > 0:
-        detected_objects = [detected[int(idx)] for idx in labels]
+        detected_objects = [class_names[int(idx)] for idx in labels]
         st.success("Gefunden: " + ", ".join(set(detected_objects)))
 
         # CSV laden oder erstellen
@@ -61,7 +57,7 @@ if uploaded_file:
         else:
             df = pd.DataFrame(columns=["zeit","datei","erkannte_objekte","fundort","beschreibung"])
 
-        # Prüfen, ob Bild + Objekte schon existiert
+        # Prüfen, ob Bild + erkannte Objekte schon gespeichert
         exists = ((df['datei'] == uploaded_file.name) & 
                   (df['erkannte_objekte'] == ", ".join(set(detected_objects)))).any()
 
@@ -76,7 +72,7 @@ if uploaded_file:
             df = pd.concat([df, pd.DataFrame([entry])], ignore_index=True)
             df.to_csv(DATA_FILE, index=False)
 
-            # Bild speichern, nur wenn es noch nicht existiert
+            # Bild speichern, nur wenn noch nicht vorhanden
             image_path = os.path.join(UPLOAD_FOLDER, uploaded_file.name)
             if not os.path.exists(image_path):
                 image.save(image_path)
@@ -90,7 +86,7 @@ if uploaded_file:
 # -----------------------------
 # Button: Alle Funde ein-/ausblenden
 # -----------------------------
-st.header("Funde anzeigen / verbergen")
+st.header("Funde ein-/ausblenden")
 if 'show_funde' not in st.session_state:
     st.session_state.show_funde = False
 
