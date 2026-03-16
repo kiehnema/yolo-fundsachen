@@ -11,7 +11,7 @@ from datetime import datetime
 # -----------------------------
 st.set_page_config(page_title="Digitales KI-Fundbüro", layout="wide")
 st.title("🧠 Digitales KI-Fundbüro")
-st.write("Bilder hochladen, Objekte automatisch erkennen. Fundliste auf Knopfdruck ein-/ausblenden.")
+st.write("Bilder hochladen, die KI erkennt automatisch alle Objekte. Funde auf Knopfdruck ein-/ausblenden.")
 
 # Ordner & CSV-Datei
 UPLOAD_FOLDER = "uploads"
@@ -28,39 +28,32 @@ def load_model():
 model = load_model()
 
 # -----------------------------
-# Eingaben für KI
+# Bild hochladen
 # -----------------------------
-classes_input = st.text_input(
-    "Welche Objekte soll die KI erkennen? (Komma getrennt)",
-    "hat, key, wallet, phone, backpack"
-)
-prompt_list = [c.strip() for c in classes_input.split(",") if c.strip()]
-
 uploaded_file = st.file_uploader(
     "Bild hochladen",
-    type=["jpg","jpeg","png"]
+    type=["jpg", "jpeg", "png"]
 )
 
 # -----------------------------
 # KI Analyse & Fund speichern
 # -----------------------------
-if uploaded_file and prompt_list:
+if uploaded_file:
     image = Image.open(uploaded_file)
     st.image(image, caption="Hochgeladenes Bild", use_column_width=True)
 
-    model.set_classes(prompt_list)
-    img_array = np.array(image)
-    st.write("🔍 KI analysiert das Bild…")
-    results = model.predict(img_array)
-
+    # Vollautomatisch: YOLO-World erkennt alle Objekte
+    results = model.predict(np.array(image))  # Kein Prompt nötig
     annotated = results[0].plot()
     st.image(annotated, caption="Erkannte Objekte", use_column_width=True)
 
     labels = results[0].boxes.cls
-    detected = [prompt_list[int(idx)] for idx in labels] if len(labels) > 0 else []
+    detected = results[0].names  # alle erkannten Klassen aus YOLOWorld
 
-    if detected:
-        st.success("Gefunden: " + ", ".join(set(detected)))
+    # Wenn Objekte erkannt wurden
+    if len(labels) > 0:
+        detected_objects = [detected[int(idx)] for idx in labels]
+        st.success("Gefunden: " + ", ".join(set(detected_objects)))
 
         # CSV laden oder erstellen
         if os.path.exists(DATA_FILE):
@@ -68,15 +61,15 @@ if uploaded_file and prompt_list:
         else:
             df = pd.DataFrame(columns=["zeit","datei","erkannte_objekte","fundort","beschreibung"])
 
-        # Prüfen, ob Bild + Objekte schon existieren
+        # Prüfen, ob Bild + Objekte schon existiert
         exists = ((df['datei'] == uploaded_file.name) & 
-                  (df['erkannte_objekte'] == ", ".join(set(detected)))).any()
+                  (df['erkannte_objekte'] == ", ".join(set(detected_objects)))).any()
 
         if not exists:
             entry = {
                 "zeit": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "datei": uploaded_file.name,
-                "erkannte_objekte": ", ".join(set(detected)),
+                "erkannte_objekte": ", ".join(set(detected_objects)),
                 "fundort": "",
                 "beschreibung": ""
             }
@@ -92,7 +85,7 @@ if uploaded_file and prompt_list:
         else:
             st.info("Dieses Bild mit den erkannten Objekten ist bereits gespeichert.")
     else:
-        st.warning("Keine der eingegebenen Objekte erkannt. Fund nicht gespeichert.")
+        st.warning("Keine Objekte erkannt. Fund nicht gespeichert.")
 
 # -----------------------------
 # Button: Alle Funde ein-/ausblenden
