@@ -1,67 +1,57 @@
 import streamlit as st
-from ultralytics import YOLO
+from ultralytics import YOLOWorld
 from PIL import Image
 import numpy as np
 
-# Seiteneinstellungen
-st.set_page_config(
-    page_title="KI Objekterkennung",
-    page_icon="🤖",
-    layout="centered"
+st.set_page_config(page_title="KI Objekterkennung (YOLO‑World)", layout="centered")
+
+st.title("🧠 YOLO‑World Objekterkennung")
+st.write("Bild hochladen und Objekte via Text‑Prompt erkennen.")
+
+# Modell laden
+@st.cache_resource
+def load_yoloworld():
+    return YOLOWorld("yolov8s-world.pt")
+
+model = load_yoloworld()
+
+# Eingabefeld für Objektnamen (Deutsch/Englisch möglich)
+classes_input = st.text_input(
+    "Welche Objekte soll die KI erkennen? (Komma getrennt)",
+    "hat, key, phone, wallet, backpack"
 )
 
-st.title("🤖 KI Objekterkennung")
-st.write("Lade ein Bild hoch und die KI erkennt automatisch die Objekte darauf.")
+prompt_list = [c.strip() for c in classes_input.split(",") if c.strip()]
 
-# Modell laden (wird einmal geladen und dann gecached)
-@st.cache_resource
-def load_model():
-    model = YOLO("yolov8n.pt")
-    return model
-
-model = load_model()
-
-# Datei Upload
 uploaded_file = st.file_uploader(
     "Bild hochladen",
-    type=["jpg", "jpeg", "png"]
+    type=["jpg","jpeg","png"]
 )
 
-if uploaded_file is not None:
+if uploaded_file and prompt_list:
 
-    # Bild öffnen
     image = Image.open(uploaded_file)
+    st.image(image, caption="Hochgeladenes Bild", use_column_width=True)
 
-    st.subheader("Hochgeladenes Bild")
-    st.image(image, use_column_width=True)
+    st.write("🔍 KI analysiert mit YOLO‑World…")
 
-    # Bild in numpy umwandeln
+    # Bild für Berechnung in numpy
     img_array = np.array(image)
 
-    st.write("🔍 KI analysiert das Bild...")
+    # Prompt setzen (Text Klassen)
+    model.set_classes(prompt_list)
 
-    # Objekterkennung
-    results = model(img_array)
+    # Vorhersage
+    results = model.predict(img_array)
 
-    # Annotiertes Bild mit Bounding Boxes
-    annotated_image = results[0].plot()
+    # Annotiertes Bild anzeigen
+    annotated = results[0].plot()
+    st.image(annotated, caption="Erkannte Objekte", use_column_width=True)
 
-    st.subheader("Erkannte Objekte")
-    st.image(annotated_image, use_column_width=True)
-
-    # Erkannte Klassen sammeln
-    labels = []
-    for cls in results[0].boxes.cls:
-        labels.append(model.names[int(cls)])
-
-    # Ergebnisse anzeigen
-    if labels:
-        unique_labels = list(set(labels))
-        st.success("Erkannt wurden:")
-        for obj in unique_labels:
-            st.write(f"• {obj}")
+    # Anzeige der gefundenen Objekte
+    labels = results[0].boxes.cls
+    detected = [prompt_list[int(idx)] for idx in labels] if len(labels)>0 else []
+    if detected:
+        st.success("Gefunden: " + ", ".join(set(detected)))
     else:
-        st.warning("Keine Objekte erkannt.")
-
-st.markdown("---")
-st.caption("KI basiert auf YOLO Objekt-Erkennung.")
+        st.warning("Keine der eingegebenen Objekte gefunden.")
