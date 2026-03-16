@@ -11,7 +11,7 @@ from datetime import datetime
 # -----------------------------
 st.set_page_config(page_title="Digitales KI-Fundbüro", layout="wide")
 st.title("🧠 Digitales KI-Fundbüro")
-st.write("Bilder hochladen, Objekte automatisch erkennen und Fundliste auf Knopfdruck anzeigen.")
+st.write("Bilder hochladen, Objekte automatisch erkennen. Fundliste auf Knopfdruck ein-/ausblenden.")
 
 # Ordner & CSV-Datei
 UPLOAD_FOLDER = "uploads"
@@ -28,7 +28,7 @@ def load_model():
 model = load_model()
 
 # -----------------------------
-# Eingaben
+# Eingaben für KI
 # -----------------------------
 classes_input = st.text_input(
     "Welche Objekte soll die KI erkennen? (Komma getrennt)",
@@ -45,7 +45,6 @@ uploaded_file = st.file_uploader(
 # KI Analyse & Fund speichern
 # -----------------------------
 if uploaded_file and prompt_list:
-
     image = Image.open(uploaded_file)
     st.image(image, caption="Hochgeladenes Bild", use_column_width=True)
 
@@ -63,33 +62,51 @@ if uploaded_file and prompt_list:
     if detected:
         st.success("Gefunden: " + ", ".join(set(detected)))
 
-        entry = {
-            "zeit": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "fundort": "",
-            "beschreibung": "",
-            "datei": uploaded_file.name,
-            "erkannte_objekte": ", ".join(set(detected))
-        }
-
+        # CSV laden oder erstellen
         if os.path.exists(DATA_FILE):
             df = pd.read_csv(DATA_FILE)
-            df = pd.concat([df, pd.DataFrame([entry])], ignore_index=True)
         else:
-            df = pd.DataFrame([entry])
+            df = pd.DataFrame(columns=["zeit","datei","erkannte_objekte","fundort","beschreibung"])
 
-        df.to_csv(DATA_FILE, index=False)
-        image.save(os.path.join(UPLOAD_FOLDER, uploaded_file.name))
+        # Prüfen, ob Bild + Objekte schon existieren
+        exists = ((df['datei'] == uploaded_file.name) & 
+                  (df['erkannte_objekte'] == ", ".join(set(detected)))).any()
 
-        st.success("Fund wurde gespeichert!")
+        if not exists:
+            entry = {
+                "zeit": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "datei": uploaded_file.name,
+                "erkannte_objekte": ", ".join(set(detected)),
+                "fundort": "",
+                "beschreibung": ""
+            }
+            df = pd.concat([df, pd.DataFrame([entry])], ignore_index=True)
+            df.to_csv(DATA_FILE, index=False)
+
+            # Bild speichern, nur wenn es noch nicht existiert
+            image_path = os.path.join(UPLOAD_FOLDER, uploaded_file.name)
+            if not os.path.exists(image_path):
+                image.save(image_path)
+
+            st.success("Fund wurde gespeichert!")
+        else:
+            st.info("Dieses Bild mit den erkannten Objekten ist bereits gespeichert.")
     else:
         st.warning("Keine der eingegebenen Objekte erkannt. Fund nicht gespeichert.")
 
 # -----------------------------
-# Button: Alle Funde anzeigen
+# Button: Alle Funde ein-/ausblenden
 # -----------------------------
-st.header("Funde anzeigen")
-if st.button("Alle Funde anzeigen"):
+st.header("Funde anzeigen / verbergen")
+if 'show_funde' not in st.session_state:
+    st.session_state.show_funde = False
 
+def toggle_funde():
+    st.session_state.show_funde = not st.session_state.show_funde
+
+st.button("Alle Funde ein-/ausblenden", on_click=toggle_funde)
+
+if st.session_state.show_funde:
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
         for i, row in df.iterrows():
